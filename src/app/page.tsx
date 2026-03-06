@@ -1,35 +1,33 @@
 import React from 'react';
+import { Title, Subtitle, FeaturesList, FeatureItem, CTAButton } from '@/components/ui';
+import { useQuery } from 'react-query';
+import axios from 'axios';
 
-const features = [
-  'Intelligent similarity search algorithms designed for niche databases.',
-  'User-friendly interface for non-expert users to easily input queries.',
-  'Batch update functionality to modify multiple database entries in one go.',
-  'Export options for similarity results in various formats (e.g., CSV, JSON).',
-  'Basic analytics dashboard to visualize search results and updates.',
-];
+const fetchFeatures = async () => {
+  const response = await axios.get('/api/features');
+  return response.data;
+};
 
 const Page: React.FC = () => {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-50">
-      <header className="text-center mb-10">
-        <h1 className="text-4xl font-bold text-gray-900">Empower Your Data Analysis with Smart Searching Tools</h1>
-        <p className="mt-2 text-lg text-gray-700">Intuitive tools for data scientists to perform smart similarity searches and database updates.</p>
-      </header>
-      
-      <section className="mb-10">
-        <h2 className="text-2xl font-semibold text-gray-800">Key Features</h2>
-        <ul className="mt-4 list-disc list-inside">
-          {features.map((feature, index) => (
-            <li key={index} className="text-gray-600">{feature}</li>
-          ))}
-        </ul>
-      </section>
+  const { data: features, error, isLoading } = useQuery('features', fetchFeatures);
 
-      <footer className="text-center mt-10">
-        <p className="text-gray-500">© {new Date().getFullYear()} DataSpark. All rights reserved.</p>
-      </footer>
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error instanceof Error ? error.message : String(error)}</div>;
+
+  return (
+    <div className="flex flex-col items-center justify-center p-6">
+      <Title>Empower Your Data Analysis with Smart Searching Tools</Title>
+      <Subtitle>
+        Intuitive tools for data scientists to perform smart similarity searches and database updates.
+      </Subtitle>
+      <FeaturesList>
+        {features.map((feature: string, index: number) => (
+          <FeatureItem key={index}>{feature}</FeatureItem>
+        ))}
+      </FeaturesList>
+      <CTAButton href="/get-started">Get Started</CTAButton>
     </div>
   );
-}
+};
 
 export default Page;
