@@ -1,0 +1,1 @@
+export const searchDocuments = async (query) => { return []; };
