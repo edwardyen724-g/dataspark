@@ -1,45 +1,41 @@
 import { NextResponse } from 'next/server';
-import type { NextApiRequest } from 'next';
 import mongoose from 'mongoose';
-import { connectToDatabase } from '@/lib/mongodb';
-import { UserData } from '@/models/UserData';
-import { createWriteStream } from 'fs';
-import { format } from 'date-fns';
+import { connectToDatabase } from '@/lib/mongodb'; // Adjust the path based on your project structure
+import { exportData } from '@/lib/export'; // Import your logic to handle exporting
+import { verifyAuth } from '@/lib/middleware'; // Import your Auth0 middleware
 
-interface ExtendedNextApiRequest extends NextApiRequest {
-  userId?: string; // Add custom property for user ID
+interface AuthedRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+  };
 }
 
-const exportData = async (req: ExtendedNextApiRequest) => {
+export async function POST(req: AuthedRequest) {
   try {
     await connectToDatabase();
-    
-    // Assume userId is passed in request headers from Auth0 session
-    const userId = req.headers['authorization']?.split(' ')[1] || req.userId; 
-    if (!userId) {
-      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
+
+    // Verify authentication
+    const user = await verifyAuth(req);
+    if (!user) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const results = await UserData.find({ userId }).lean();
+    const body = await req.json();
+    const { format, query } = body;
 
-    if (results.length === 0) {
-      return NextResponse.json({ error: 'No data found for this user' }, { status: 404 });
+    if (!format || !query) {
+      return NextResponse.json({ message: 'Invalid payload' }, { status: 400 });
     }
 
-    const timestamp = format(new Date(), 'yyyyMMdd_HHmmss');
-    const fileName = `exported_data_${timestamp}.json`;
-    const filePath = `/tmp/${fileName}`; // Temporary file storage path
+    // Perform data export based on the query
+    const result = await exportData(query, format, user.id);
 
-    const writeStream = createWriteStream(filePath);
-    writeStream.write(JSON.stringify(results, null, 2));
-    writeStream.end();
-
-    return NextResponse.json({ message: 'Data export successful', fileName }, { status: 200 });
+    return new NextResponse(JSON.stringify(result), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+    return NextResponse.json({ message: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
-};
-
-export async function POST(req: ExtendedNextApiRequest) {
-  return exportData(req);
 }
