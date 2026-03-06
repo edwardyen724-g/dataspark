@@ -1,64 +1,48 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { connectToDatabase } from '@/lib/mongodb';
-import { verify } from 'jsonwebtoken';
-import { createSubscription, getSubscription, updateSubscription } from '@/lib/stripe';
-import { auth } from '@/lib/auth';
+import { NextRequest, NextResponse } from 'next/server';
+import { MongoClient } from 'mongodb';
+import { Stripe } from 'stripe';
+import { env } from 'process';
 
-interface AuthedRequest extends NextApiRequest {
-  user?: { id: string; email: string };
-}
+const uri = process.env.MONGODB_URI as string;
+const client = new MongoClient(uri);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+  apiVersion: '2020-08-27'
+});
 
-const rateLimit = new Map<string, number>();
-
-const rateLimiter = (req: AuthedRequest) => {
-  const ip = req.ip || '127.0.0.1';
-  const currentTime = Date.now();
-  const limitWindow = 60 * 1000; // 1 minute
-  const requestCount = rateLimit.get(ip) || 0;
-
-  if (requestCount >= 5) {
-    throw new Error('Too many requests. Please try again later.');
-  }
-
-  rateLimit.set(ip, requestCount + 1);
-  
-  setTimeout(() => {
-    rateLimit.set(ip, Math.max(0, requestCount - 1));
-  }, limitWindow);
-};
-
-export async function POST(req: AuthedRequest, res: NextApiResponse) {
+export async function POST(req: NextRequest) {
   try {
-    rateLimiter(req);
+    const { email, paymentMethodId, priceId } = await req.json();
 
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({ message: 'Unauthorized' });
+    if (!email || !paymentMethodId || !priceId) {
+      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
 
-    const decoded = verify(token, process.env.AUTH0_SECRET as string);
-    req.user = { id: decoded.sub, email: decoded.email };
+    const customer = await stripe.customers.create({
+      email,
+      payment_method: paymentMethodId,
+      invoice_settings: {
+        default_payment_method: paymentMethodId,
+      },
+    });
 
-    const body = await req.json();
-    const { action, subscriptionId } = body;
+    const subscription = await stripe.subscriptions.create({
+      customer: customer.id,
+      items: [{ price: priceId }],
+      expand: ['latest_invoice.payment_intent'],
+    });
 
-    await connectToDatabase();
+    await client.connect();
+    const db = client.db('subscriptions');
+    await db.collection('users').updateOne(
+      { email },
+      { $set: { stripeCustomerId: customer.id, subscriptionId: subscription.id } },
+      { upsert: true }
+    );
 
-    switch (action) {
-      case 'create':
-        const subscription = await createSubscription(req.user.email);
-        return res.status(201).json(subscription);
-      case 'retrieve':
-        const retrievedSubscription = await getSubscription(subscriptionId);
-        return res.status(200).json(retrievedSubscription);
-      case 'update':
-        const updatedSubscription = await updateSubscription(subscriptionId);
-        return res.status(200).json(updatedSubscription);
-      default:
-        return res.status(400).json({ message: 'Invalid action' });
-    }
+    return NextResponse.json({ subscription });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: err instanceof Error ? err.message : String(err) });
+    return NextResponse.json({ message: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  } finally {
+    await client.close();
   }
 }
