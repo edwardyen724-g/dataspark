@@ -1,4 +1,1 @@
-export const connectToDatabase = async () => {
-  // Stub for connecting to MongoDB
-  return null;
-};
+export const connectToDatabase = async () => { return { db: null }; };
