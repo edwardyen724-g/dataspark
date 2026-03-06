@@ -1,0 +1,1 @@
+export interface AuthSession { user: { email: string; name: string; }; };
