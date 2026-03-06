@@ -1,38 +1,29 @@
-import { NextResponse } from "next/server";
-import { connectToDatabase } from "@/lib/mongodb";
-import { SearchResults } from "@/types/search";
-import mongoose from "mongoose";
+import { NextResponse } from 'next/server';
+import mongoose from 'mongoose';
+import { connectToDatabase } from '@/lib/mongodb';
+import { searchDocuments } from '@/lib/searchService'; // hypothetical search service 
+import { ValidationError } from '@/lib/errors'; // hypothetical error handling
 
+// Define types for request and response
 interface SearchRequest {
   query: string;
+  limit?: number;
 }
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const { query } = (await request.json()) as SearchRequest;
+    const { query, limit } = await req.json() as SearchRequest;
 
     if (!query) {
-      return NextResponse.json({ message: "Query is required" }, { status: 400 });
+      throw new ValidationError('Query parameter is required.');
     }
 
     await connectToDatabase();
 
-    const results: SearchResults[] = await performSearch(query);
+    const results = await searchDocuments(query, limit);
     
-    return NextResponse.json(results);
+    return NextResponse.json({ results });
   } catch (err) {
-    return NextResponse.json(
-      { message: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
-}
-
-async function performSearch(query: string): Promise<SearchResults[]> {
-  // Implement your intelligent similarity search logic here
-  // This is a mock response
-  return [
-    { id: "1", similarityScore: 0.95, result: "Result 1" },
-    { id: "2", similarityScore: 0.90, result: "Result 2" },
-  ];
 }
