@@ -1,28 +1,33 @@
-const { bold } = require('tailwindcss/lib/util/body');
+const colors = require('tailwindcss/colors');
 
 module.exports = {
   content: [
-    './src/app/**/*.{js,ts,jsx,tsx}',
-    './src/components/**/*.{js,ts,jsx,tsx}',
-    './src/pages/**/*.{js,ts,jsx,tsx}',
+    "./src/app/**/*.{js,ts,jsx,tsx}",
+    "./src/components/**/*.{js,ts,jsx,tsx}",
+    "./src/pages/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
       colors: {
-        primary: '#1D4ED8', // Blue for primary actions
-        secondary: '#3B82F6', // Lighter blue for secondary actions
-        accent: '#FBBF24', // Yellow for highlights
-        background: '#F9FAFB', // Light background color
-        text: '#3B3B3B', // Dark text color for readability
+        primary: colors.blue[600],
+        secondary: colors.green[600],
+        accent: colors.pink[600],
+        neutral: colors.gray[600],
+        'base-100': colors.white,
+        info: colors.blue[400],
+        success: colors.green[400],
+        warning: colors.yellow[400],
+        error: colors.red[400],
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'], // Primary font
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        serif: ['Merriweather', 'serif'],
       },
-      fontSize: {
-        'xxs': '0.625rem', // Extra small text for labels
-        'xxl': '1.5rem', // Extra large text for headings
+      spacing: {
+        '128': '32rem',
+        '144': '36rem',
       },
     },
   },
   plugins: [],
-}
+};
