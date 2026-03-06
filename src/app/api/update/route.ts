@@ -1,41 +1,51 @@
-import { NextResponse } from "next/server";
-import type { NextApiRequest } from "next";
-import mongoose from "mongoose";
-import { dbConnect } from "@/lib/dbConnect"; // Assuming you have a dbConnect utility
-import YourModel from "@/models/YourModel"; // Replace with your actual Mongoose model
-import { Auth0Request } from "@/lib/auth"; // Assuming you have an Auth0 utility for request
+import { NextApiRequest, NextApiResponse } from 'next';
+import { connectToDatabase } from '@/lib/mongodb'; // Assuming you have a MongoDB connection utility
+import { getAuth } from 'firebase-admin/auth';
+import { z } from 'zod';
 
 interface AuthedRequest extends NextApiRequest {
-  user?: { id: string; email: string }; // Extend with user properties as needed
+  user?: { uid: string; email: string }; // Adding user property for authentication
 }
 
-export async function POST(req: Request) {
+const updateSchema = z.object({
+  entries: z.array(
+    z.object({
+      id: z.string(),
+      data: z.object({ /* Define the structure of your update data here */ }),
+    })
+  ),
+});
+
+export async function POST(req: AuthedRequest, res: NextApiResponse) {
   try {
-    await dbConnect();
-
+    // Validate request body
     const body = await req.json();
-    const { updates } = body; // Expecting updates array of objects
+    const { entries } = updateSchema.parse(body);
 
-    if (!Array.isArray(updates) || updates.length === 0) {
-      return NextResponse.json({ message: "No updates provided." }, { status: 400 });
+    // Authenticate and get user info
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    // Assuming user information is added to the request by an Auth0 middleware
-    const user: AuthedRequest["user"] = Auth0Request(req);
-    if (!user) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
+    const user = await getAuth().verifyIdToken(token);
+    req.user = { uid: user.uid, email: user.email };
 
-    const updatePromises = updates.map(async (updateData) => {
-      // Assuming updateData contains an identifier to find the record and the fields to update
-      const { id, ...updateFields } = updateData;
-      return await YourModel.findByIdAndUpdate(id, updateFields, { new: true });
-    });
+    // Connect to database
+    const db = await connectToDatabase();
 
-    const results = await Promise.all(updatePromises);
+    // Perform batch update
+    const updatePromises = entries.map(entry =>
+      db.collection('your_collection_name').updateOne(
+        { _id: entry.id }, // Adjust based on your database schema
+        { $set: entry.data }
+      )
+    );
 
-    return NextResponse.json({ message: "Updates successful", results }, { status: 200 });
+    await Promise.all(updatePromises);
+
+    return res.status(200).json({ message: 'Update successful' });
   } catch (err) {
-    return NextResponse.json({ message: err instanceof Error ? err.message : String(err) }, { status: 500 });
+    return res.status(400).json({ message: err instanceof Error ? err.message : String(err) });
   }
 }
