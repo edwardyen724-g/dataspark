@@ -1,7 +1,2 @@
-export type Auth0Request = {
-  // Stub for Auth0 request type
-};
-
-export const auth = (req: Auth0Request) => {
-  // Stub for authentication logic
-};
+export const checkAuth = (req) => { return true; };
+export const setLoginSession = async (session) => { return; };
